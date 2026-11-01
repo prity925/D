@@ -1,7 +1,5 @@
-"""动态环境模型"""
 from __future__ import annotations
 import numpy as np
-
 from simulation.config import EnvironmentConfig
 from simulation.models import Coord, MOORE_OFFSETS
 
@@ -14,13 +12,11 @@ class DynamicEnvironment:
         self.rows = config.rows
         self.cols = config.cols
         self.elapsed_ticks = 0
-
         self.minefield = (self.rng.random((self.rows, self.cols)) < config.initial_state_rate_b1)
         self.initial_mine_ratio_a1 = float(self.minefield.mean())
         self.region_weight = self._build_region_weights()
         self.b2 = np.clip(self.initial_mine_ratio_a1 * self.region_weight, 0.0, 1.0)
         self.initial_average_mutation_b3 = float(self.b2.mean())
-
         self.frozen = np.zeros((self.rows, self.cols), dtype=bool)
         self.resample_count = np.zeros((self.rows, self.cols), dtype=int)
         self.state_change_count = np.zeros((self.rows, self.cols), dtype=int)
@@ -115,14 +111,14 @@ class DynamicEnvironment:
         revealed = [coord]
         hit_mine = bool(self.minefield[coord])
         if not hit_mine and self.neighbor_counts[coord] == 0:
-            candidates = [neighbor for neighbor in self.neighbors(coord) if not opened[neighbor] and not self.minefield[neighbor]]
+            candidates = [n for n in self.neighbors(coord) if not opened[n] and not self.minefield[n]]
             if candidates:
                 lower = min(self.config.empty_reveal_min_h2, self.config.empty_reveal_max_h2)
                 upper = max(self.config.empty_reveal_min_h2, self.config.empty_reveal_max_h2)
                 count = min(len(candidates), int(self.rng.integers(lower, upper + 1)))
                 if count > 0:
                     indices = self.rng.choice(len(candidates), size=count, replace=False)
-                    revealed.extend(candidates[int(index)] for index in np.atleast_1d(indices))
+                    revealed.extend(candidates[int(i)] for i in np.atleast_1d(indices))
         observations = [(cell, self.observable_label(cell)) for cell in revealed]
         return {"hit_mine": hit_mine, "observations": observations}
 
@@ -147,13 +143,13 @@ class DynamicEnvironment:
 
     def defuse(self, coord: Coord) -> str:
         if self.minefield[coord]:
-           self.minefield[coord] = False
-           self.state_change_count[coord] += 1
-           self.last_state_change[coord] = True
-           result = "mine"
-       else:
-           self.boost_b2_around(coord, self.config.infection_step_h1)
-           result = "non_mine"
+            self.minefield[coord] = False
+            self.state_change_count[coord] += 1
+            self.last_state_change[coord] = True
+            result = "mine"
+        else:
+            self.boost_b2_around(coord, self.config.infection_step_h1)
+            result = "non_mine"
         self.scan_global_state()
         return result
 
@@ -165,36 +161,34 @@ class DynamicEnvironment:
         selection_probability = float(np.clip(self.initial_number_ratio_a2 * self.config.infection_center_c2, 0.0, 1.0))
         for row, col in np.argwhere(self.minefield):
             center = (int(row), int(col))
-            if self.rng.random() >= selection_probability: continue
-            neighbors = self.neighbors(center)
-            non_empty_neighbors = [coord for coord in neighbors if self.observable_label(coord) != "empty"]
-            n = len(non_empty_neighbors)
-            if n == 0: continue
-            count = n // 2 if self.rng.random() < 0.5 else (n + 1) // 2
-            candidates = [center, *neighbors]
-            if count <= 0: continue
-            indices = self.rng.choice(len(candidates), size=min(count, len(candidates)), replace=False)
-            for index in np.atleast_1d(indices):
-                coord = candidates[int(index)]
-                if self.rng.random() < 0.7:
-                    delta = self.config.infection_step_h1
-                else:
-                    delta = -self.config.infection_step_h1
-                self.b2[coord] = np.clip(self.b2[coord] + delta, 0.0, 1.0)
+                    if self.rng.random() >= selection_probability: continue
+        neighbors = self.neighbors(center)
+        non_empty_neighbors = [coord for coord in neighbors if self.observable_label(coord) != "empty"]
+        n = len(non_empty_neighbors)
+        if n == 0: continue
+        count = n // 2 if self.rng.random() < 0.5 else (n + 1) // 2
+        candidates = [center, *neighbors]
+        if count <= 0: continue
+        indices = self.rng.choice(len(candidates), size=min(count, len(candidates)), replace=False)
+        for index in np.atleast_1d(indices):
+            coord = candidates[int(index)]
+            if self.rng.random() < 0.7:
+                delta = self.config.infection_step_h1
+            else:
+                delta = -self.config.infection_step_h1
+            self.b2[coord] = np.clip(self.b2[coord] + delta, 0.0, 1.0)
 
-    def step(self) -> None:
-        self.elapsed_ticks += 1
-        mutable = ~self.frozen
-        previous = self.minefield.copy()
-        flip = self.rng.random((self.rows, self.cols)) < self.b2
-        self.minefield[mutable] ^= flip[mutable]
-        self.resample_count[mutable] += 1
-        self.last_state_change = np.logical_and(previous != self.minefield, mutable)
-        self.state_change_count[self.last_state_change] += 1
-    
-        rate = self.config.mutation_feedback_rate
-        self.b2[mutable] += rate * (self.last_state_change[mutable].astype(float) - 0.5)
-    
-        self.scan_global_state()
-        self._apply_conduction()
-        self.b2 = np.clip(self.b2, 0.0, 1.0)
+def step(self) -> None:
+    self.elapsed_ticks += 1
+    mutable = ~self.frozen
+    previous = self.minefield.copy()
+    flip = self.rng.random((self.rows, self.cols)) < self.b2
+    self.minefield[mutable] ^= flip[mutable]
+    self.resample_count[mutable] += 1
+    self.last_state_change = np.logical_and(previous != self.minefield, mutable)
+    self.state_change_count[self.last_state_change] += 1
+    rate = self.config.mutation_feedback_rate
+    self.b2[mutable] += rate * (self.last_state_change[mutable].astype(float) - 0.5)
+    self.scan_global_state()
+    self._apply_conduction()
+    self.b2 = np.clip(self.b2, 0.0, 1.0)
