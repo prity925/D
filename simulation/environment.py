@@ -161,7 +161,7 @@ class DynamicEnvironment:
         selection_probability = float(np.clip(self.initial_number_ratio_a2 * self.config.infection_center_c2, 0.0, 1.0))
         for row, col in np.argwhere(self.minefield):
             center = (int(row), int(col))
-                    if self.rng.random() >= selection_probability: continue
+            if self.rng.random() >= selection_probability: continue
         neighbors = self.neighbors(center)
         non_empty_neighbors = [coord for coord in neighbors if self.observable_label(coord) != "empty"]
         n = len(non_empty_neighbors)
