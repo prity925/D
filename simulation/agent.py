@@ -131,7 +131,7 @@ def defuse_cost_steps(self) -> int:
     return max(1, int(math.ceil(self.defuse_cost())))
 
 def check_lose_defuse_ability(self) -> None:
-    # 统子终极修改：双向晃动失能判定
+    # 双向晃动失能判定
     if self.defuse_cost() > self.N * 0.02:
         if self.defuse_enabled: 
             self.overload_events += 1
@@ -301,6 +301,7 @@ def apply_interval_event(self, event: IntervalEvent) -> None:
 def advance_action_step(self, readings: dict[Coord, dict[Coord, str]]) -> None:
     self.advance_action_tick(readings)
     for event in self.collect_clearing_events(): self.apply_interval_event(event)
+
 def _constraint_hints(self) -> tuple[set[Coord], set[Coord], set[Coord]]:
     safe: set[Coord] = set()
     mines: set[Coord] = set()
