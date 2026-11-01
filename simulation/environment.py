@@ -178,17 +178,17 @@ class DynamicEnvironment:
                 delta = -self.config.infection_step_h1
             self.b2[coord] = np.clip(self.b2[coord] + delta, 0.0, 1.0)
 
-def step(self) -> None:
-    self.elapsed_ticks += 1
-    mutable = ~self.frozen
-    previous = self.minefield.copy()
-    flip = self.rng.random((self.rows, self.cols)) < self.b2
-    self.minefield[mutable] ^= flip[mutable]
-    self.resample_count[mutable] += 1
-    self.last_state_change = np.logical_and(previous != self.minefield, mutable)
-    self.state_change_count[self.last_state_change] += 1
-    rate = self.config.mutation_feedback_rate
-    self.b2[mutable] += rate * (self.last_state_change[mutable].astype(float) - 0.5)
-    self.scan_global_state()
-    self._apply_conduction()
-    self.b2 = np.clip(self.b2, 0.0, 1.0)
+    def step(self) -> None:
+        self.elapsed_ticks += 1
+        mutable = ~self.frozen
+        previous = self.minefield.copy()
+        flip = self.rng.random((self.rows, self.cols)) < self.b2
+        self.minefield[mutable] ^= flip[mutable]
+        self.resample_count[mutable] += 1
+        self.last_state_change = np.logical_and(previous != self.minefield, mutable)
+        self.state_change_count[self.last_state_change] += 1
+        rate = self.config.mutation_feedback_rate
+        self.b2[mutable] += rate * (self.last_state_change[mutable].astype(float) - 0.5)
+        self.scan_global_state()
+        self._apply_conduction()
+        self.b2 = np.clip(self.b2, 0.0, 1.0)
