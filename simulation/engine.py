@@ -147,6 +147,7 @@ def _handle_defuse(*, action: PlannedAction, environment: DynamicEnvironment, ag
     history.append(_history_row(action=action.action_type, action_target=action.target, action_phase=f"defuse_result_{result}", comparison=comparison, environment=environment, agent=agent, coupling=coupling))
     _complete_action(action=action, action_start_step=action_start_step, comparison=comparison, environment=environment, agent=agent, agent_config=agent_config, coupling=coupling, simulation=simulation_config, history=history, snapshots=snapshots, capture_snapshots=capture_snapshots)
     return True
+
 def _handle_adjudicate(*, action: PlannedAction, environment: DynamicEnvironment, agent: ConstrainedAgent, agent_config: AgentConfig, coupling: CouplingConfig, simulation_config: SimulationConfig, comparison: str, history: list[dict[str, Any]], snapshots: list[dict[str, Any]], capture_snapshots: bool, **_kwargs: Any) -> bool:
     cost = agent_config.adjudicate_cost_d4
     if agent.action_step + cost > simulation_config.max_action_steps: return False
