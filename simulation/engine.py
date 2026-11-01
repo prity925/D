@@ -84,7 +84,7 @@ def _advance_action_ticks(*, count: int, action: PlannedAction, action_phase: st
 def _complete_action(*, action: PlannedAction, action_start_step: int, comparison: str, environment: DynamicEnvironment, agent: ConstrainedAgent, agent_config: AgentConfig, coupling: CouplingConfig, simulation: SimulationConfig, history: list[dict[str, Any]], snapshots: list[dict[str, Any]], capture_snapshots: bool) -> None:
     for event in agent.collect_clearing_events():
         agent.apply_interval_event(event)
-                history.append(_history_row(action=action.action_type, action_target=action.target, action_phase=f"interval_{event.event_type}", comparison=comparison, environment=environment, agent=agent, coupling=coupling, interval_due_step=event.due_step, interval_priority=event.priority))
+        history.append(_history_row(action=action.action_type, action_target=action.target, action_phase=f"interval_{event.event_type}", comparison=comparison, environment=environment, agent=agent, coupling=coupling, interval_due_step=event.due_step, interval_priority=event.priority))
 
 def _cell_observations(raw: list[tuple[Coord, str]], *, action_step: int, revealed: bool, source: str) -> list[CellObservation]:
     return [CellObservation(coord=coord, state=state, action_step=action_step, revealed=revealed, source=source) for coord, state in raw]
@@ -241,18 +241,18 @@ def run_simulation(*, environment_config: EnvironmentConfig, agent_config: Agent
     }
 
 def run_parameter_scan(*, environment_config: EnvironmentConfig, agent_config: AgentConfig, coupling_config: CouplingConfig, simulation_config: SimulationConfig, scan_config: ScanConfig) -> list[dict[str, Any]]:
-  b1_values = np.linspace(scan_config.b1_start, scan_config.b1_end, scan_config.b1_points)
-  theta_values = np.linspace(scan_config.theta_start, scan_config.theta_end, scan_config.theta_points)
-  seeds = range(scan_config.seed_start, scan_config.seed_start + scan_config.seed_count)
-  combinations = list(product(b1_values, theta_values, seeds))
-  if len(combinations) > scan_config.max_runs:
-    raise ValueError(f"scan requests {len(combinations)} runs; maximum is {scan_config.max_runs}")
-  rows: list[dict[str, Any]] = []
-  for run_index, (b1, theta, seed) in enumerate(combinations, start=1):
-    environment = replace(environment_config, initial_state_rate_b1=float(b1))
-    coupling = replace(coupling_config, theta=float(theta))
-    simulation = replace(simulation_config, seed=int(seed))
-    result = run_simulation(environment_config=environment, agent_config=agent_config, coupling_config=coupling, simulation_config=simulation, capture_snapshots=False)
-      for history_row in result["history"]:
-        rows.append({"run_id": run_index, "scan_b1": float(b1), "scan_theta": float(theta), "seed": int(seed), **history_row})
-  return rows    
+    b1_values = np.linspace(scan_config.b1_start, scan_config.b1_end, scan_config.b1_points)
+    theta_values = np.linspace(scan_config.theta_start, scan_config.theta_end, scan_config.theta_points)
+    seeds = range(scan_config.seed_start, scan_config.seed_start + scan_config.seed_count)
+    combinations = list(product(b1_values, theta_values, seeds))
+    if len(combinations) > scan_config.max_runs:
+        raise ValueError(f"scan requests {len(combinations)} runs; maximum is {scan_config.max_runs}")
+    rows: list[dict[str, Any]] = []
+    for run_index, (b1, theta, seed) in enumerate(combinations, start=1):
+        environment = replace(environment_config, initial_state_rate_b1=float(b1))
+        coupling = replace(coupling_config, theta=float(theta))
+        simulation = replace(simulation_config, seed=int(seed))
+        result = run_simulation(environment_config=environment, agent_config=agent_config, coupling_config=coupling, simulation_config=simulation, capture_snapshots=False)
+        for history_row in result["history"]:
+            rows.append({"run_id": run_index, "scan_b1": float(b1), "scan_theta": float(theta), "seed": int(seed), **history_row})
+    return rows
