@@ -26,7 +26,6 @@ class ConstrainedAgent:
         self.memory: dict[Coord, MemoryEntry] = {}
         self.probes: list[Probe] = []
         self.cell_probe_stats: dict[Coord, CellProbeStats] = {}
-
         self.action_step = 0
         self.decision_index = 0
         self.probe_grant_progress = 0
@@ -39,7 +38,7 @@ class ConstrainedAgent:
         self.current_anchor: Coord | None = None
         self.first_number_coord: Coord | None = None
         self.defuse_history: deque[bool] = deque(maxlen=10)
-        
+
         self.N = self.rows * self.cols 
         self.true_b3 = initial_mine_ratio_a1 
         self.defused_mines = 0
@@ -52,6 +51,7 @@ class ConstrainedAgent:
         self.probe_grant_events = 0
         self.adjudication_grant_events = 0
         self.adjudications_used = 0
+
 @property
 def estimated_mutation(self) -> float:
     return self.estimated_mutation_b4
@@ -100,12 +100,6 @@ def observe_cells(self, observations: list[CellObservation]) -> None:
         self._remember(coord, observed_state=observation.state, marker="none" if observation.revealed else (current.marker if current else "none"), revealed=bool(self.opened[coord]), visible_mutation_ratio=current.visible_mutation_ratio if current else 0.0, confidence=1.0 if observation.revealed else 0.8, source=observation.source)
     if observations and self.current_anchor is None:
         self.current_anchor = observations[0].coord
-def apply_marker(self, action_type: str, coord: Coord) -> None:
-    current = self.memory.get(coord)
-    marker = "flag" if action_type == "mark_flag" else "question"
-    self.flags[coord] = marker == "flag"
-    self.questions[coord] = marker == "question"
-    self._remember(coord, observed_state=current.observed_state if current else "unknown", marker=marker, revealed=bool(self.opened[coord]), visible_mutation_ratio=current.visible_mutation_ratio if current else 0.0, confidence=0.85 if marker == "flag" else 0.35, source="marker", note="constraint marker")
 
 def apply_marker(self, action_type: str, coord: Coord) -> None:
     current = self.memory.get(coord)
@@ -131,7 +125,6 @@ def defuse_cost_steps(self) -> int:
     return max(1, int(math.ceil(self.defuse_cost())))
 
 def check_lose_defuse_ability(self) -> None:
-    # 双向晃动失能判定
     if self.defuse_cost() > self.N * 0.02:
         if self.defuse_enabled: 
             self.overload_events += 1
@@ -184,7 +177,7 @@ def _estimated_local_mutation(self, center: Coord) -> float:
     if not samples: return self.estimated_mutation_b4
     return float(np.clip(np.mean(samples), 0.0, 1.0))
 
-defconsume_probe_opportunity(self) -> None:
+def consume_probe_opportunity(self) -> None:
     self.probe_opportunity = False
 
 def place_probe(self, center: Coord, initial_scan: dict[Coord, str], duration: int) -> None:
@@ -259,7 +252,7 @@ def decay_memory(self) -> None:
     for coord in removed_coords - remaining_coords:
         self.flags[coord] = False
         self.questions[coord] = False
-        self.opened[coord] = False # 统子修改：连带遗忘物理踩点
+        self.opened[coord] = False 
 
 def advance_action_tick(self, readings: dict[Coord, dict[Coord, str]], *, counts_for_probe_grant: bool = True) -> None:
     self.action_step += 1
@@ -391,7 +384,6 @@ def _choose_adjudicate_center(self) -> Coord | None:
     return max(candidates, key=score)
 
 def _number_followup(self) -> Coord | None:
-    # 常态化扫描所有数字周围
     if self.initial_mine_ratio_a1 > self.config.number_followup_threshold: return None
     if self.rng.random() >= self.config.number_followup_probability: return None
     all_candidates = []
@@ -412,9 +404,7 @@ def _sync_markers(self) -> None:
 def choose_action(self) -> PlannedAction:
     self._sync_markers()
     if not self.opened.any(): return PlannedAction("reveal", (int(self.rng.integers(0, self.rows)), int(self.rng.integers(0, self.cols))))
-    
     if not self.defuse_enabled:
-        # 失能后不能再放探测器
         if self.adjudication_opportunity:
             center = self._choose_adjudicate_center()
             if center is not None: return PlannedAction("adjudicate", center)
@@ -424,45 +414,39 @@ def choose_action(self) -> PlannedAction:
         hidden = self._choose_hidden_target()
         if hidden is not None: return PlannedAction("reveal", hidden)
         return PlannedAction("wait", None)
-        
     predictable = self.in_predictable_mode()
     safe, _, _ = self._constraint_hints()
     safe_target = self._choose_hidden_target(safe)
     if safe_target is not None and safe_target in safe: return PlannedAction("reveal", safe_target)
-    
     if self.probe_opportunity and not predictable:
         center = self._choose_probe_center_with_flag_prior()
         if center is not None: return PlannedAction("probe", center)
-        
     defuse_target = self._choose_defuse_target()
     if defuse_target is not None:
         self.check_lose_defuse_ability()
         if self.defuse_enabled: return PlannedAction("defuse", defuse_target)
-        
     if self.probe_opportunity:
         center = self._choose_probe_center_with_flag_prior()
-    if center is not None: return PlannedAction("probe", center)
-    
-followup = self._number_followup() 
-if followup is not None: return PlannedAction("reveal", followup)
+        if center is not None: return PlannedAction("probe", center)
 
-hidden = self._choose_hidden_target()
-if hidden is not None: return PlannedAction("reveal", hidden)
-return PlannedAction("wait", None)
+    followup = self._number_followup()
+    if followup is not None: return PlannedAction("reveal", followup)
+
+    hidden = self._choose_hidden_target()
+    if hidden is not None: return PlannedAction("reveal", hidden)
+    return PlannedAction("wait", None)
 
 def memory_size(self) -> int:
     return len(self.observation_log)
 
 def memory_heatmap(self) -> np.ndarray:
     heatmap = np.zeros((self.rows, self.cols), dtype=float)
-    for coord, entry in self.memory.items(): 
-        heatmap[coord] = max(entry.visible_mutation_ratio, entry.confidence * 0.5)
+    for coord, entry in self.memory.items(): heatmap[coord] = max(entry.visible_mutation_ratio, entry.confidence * 0.5)
     return heatmap
 
 def estimated_volatility_grid(self) -> np.ndarray:
     grid = np.zeros((self.rows, self.cols), dtype=float)
-    for coord, entry in self.memory.items(): 
-        grid[coord] = entry.visible_mutation_ratio
+    for coord, entry in self.memory.items(): grid[coord] = entry.visible_mutation_ratio
     return grid
 
 def known_state_grid(self) -> np.ndarray:
@@ -470,6 +454,5 @@ def known_state_grid(self) -> np.ndarray:
     for coord, entry in self.memory.items():
         if entry.observed_state == "mine": grid[coord] = 9
         elif entry.observed_state == "empty": grid[coord] = 0
-        elif entry.observed_state.startswith("number:"): 
-            grid[coord] = int(entry.observed_state.split(":", maxsplit=1)[1])
+        elif entry.observed_state.startswith("number:"): grid[coord] = int(entry.observed_state.split(":", maxsplit=1)[1])
     return grid
