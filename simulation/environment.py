@@ -161,16 +161,17 @@ class DynamicEnvironment:
         selection_probability = float(np.clip(self.initial_number_ratio_a2 * self.config.infection_center_c2, 0.0, 1.0))
         for row, col in np.argwhere(self.minefield):
             center = (int(row), int(col))
-            if self.rng.random() >= selection_probability: continue
-        neighbors = self.neighbors(center)
-        non_empty_neighbors = [coord for coord in neighbors if self.observable_label(coord) != "empty"]
-        n = len(non_empty_neighbors)
-        if n == 0: 
-            continue
-        count = n // 2 if self.rng.random() < 0.5 else (n + 1) // 2
-        candidates = [center, *neighbors]
-        if count <= 0: 
-            continue
+            if self.rng.random() >= selection_probability: 
+                continue
+            neighbors = self.neighbors(center)
+            non_empty_neighbors = [coord for coord in neighbors if self.observable_label(coord) != "empty"]
+            n = len(non_empty_neighbors)
+            if n == 0: 
+                continue
+            count = n // 2 if self.rng.random() < 0.5 else (n + 1) // 2
+            candidates = [center, *neighbors]
+            if count <= 0: 
+                continue
         indices = self.rng.choice(len(candidates), size=min(count, len(candidates)), replace=False)
         for index in np.atleast_1d(indices):
             coord = candidates[int(index)]
