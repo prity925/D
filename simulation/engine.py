@@ -1,5 +1,4 @@
-"""仿真引擎：按 DSFCM 文档协调系统 A 与 B、驱动步进、结算清算窗口并记录历史。"""
-
+"""仿真引擎"""
 from __future__ import annotations
 from dataclasses import replace
 from itertools import product
@@ -67,6 +66,7 @@ def _history_row(*, action: str, action_target: Coord | None, action_phase: str,
         "defuse_enabled": agent.defuse_enabled, "frozen_cells": int(environment.frozen.sum()),
         "disable_events": agent.overload_events, "defused_mines": agent.defused_mines,
     }
+
 def _probe_readings(environment: DynamicEnvironment, agent: ConstrainedAgent) -> dict[Coord, dict[Coord, str]]:
     return {probe.center: environment.probe_scan(probe.center) for probe in agent.probes if probe.remaining_steps > 0}
 
@@ -75,12 +75,7 @@ def _advance_action_ticks(*, count: int, action: PlannedAction, action_phase: st
     for _ in range(count):
         environment.step()
         agent.advance_action_tick(_probe_readings(environment, agent), counts_for_probe_grant=counts_for_probe_grant)
-        history.append(
-            _history_row(
-                action=action.action_type, action_target=action.target, action_phase=action_phase,
-                comparison=comparison, environment=environment, agent=agent, coupling=coupling,
-            )
-        )
+        history.append(_history_row(action=action.action_type, action_target=action.target, action_phase=action_phase, comparison=comparison, environment=environment, agent=agent, coupling=coupling))
         if capture_snapshots and simulation.snapshot_interval > 0:
             if (agent.action_step - 1) // simulation.snapshot_interval < agent.action_step // simulation.snapshot_interval:
                 snapshots.append(_capture_snapshot(action=action.action_type, environment=environment, agent=agent, coupling=coupling))
@@ -89,13 +84,7 @@ def _advance_action_ticks(*, count: int, action: PlannedAction, action_phase: st
 def _complete_action(*, action: PlannedAction, action_start_step: int, comparison: str, environment: DynamicEnvironment, agent: ConstrainedAgent, agent_config: AgentConfig, coupling: CouplingConfig, simulation: SimulationConfig, history: list[dict[str, Any]], snapshots: list[dict[str, Any]], capture_snapshots: bool) -> None:
     for event in agent.collect_clearing_events():
         agent.apply_interval_event(event)
-        history.append(
-            _history_row(
-                action=action.action_type, action_target=action.target, action_phase=f"interval_{event.event_type}",
-                comparison=comparison, environment=environment, agent=agent, coupling=coupling,
-                interval_due_step=event.due_step, interval_priority=event.priority,
-            )
-        )
+                history.append(_history_row(action=action.action_type, action_target=action.target, action_phase=f"interval_{event.event_type}", comparison=comparison, environment=environment, agent=agent, coupling=coupling, interval_due_step=event.due_step, interval_priority=event.priority))
 
 def _cell_observations(raw: list[tuple[Coord, str]], *, action_step: int, revealed: bool, source: str) -> list[CellObservation]:
     return [CellObservation(coord=coord, state=state, action_step=action_step, revealed=revealed, source=source) for coord, state in raw]
@@ -210,60 +199,60 @@ def run_simulation(*, environment_config: EnvironmentConfig, agent_config: Agent
                 termination_reason = "insufficient_budget_for_atomic_action"
                 history.append(_history_row(action=action.action_type, action_target=action.target, action_phase="action_not_started_insufficient_budget", comparison=comparison, environment=environment, agent=agent, coupling=coupling))
                 break
-except Exception as exc:
-    error_message = str(exc)
-    termination_reason = "error"
+    except Exception as exc:
+        error_message = str(exc)
+        termination_reason = "error"
 
-if capture_snapshots:
-    snapshots.append(_capture_snapshot(action="final", environment=environment, agent=agent, coupling=coupling))
+    if capture_snapshots:
+        snapshots.append(_capture_snapshot(action="final", environment=environment, agent=agent, coupling=coupling))
 
-summary: dict[str, Any] = {
-    "executed_steps": agent.action_step, "action_steps": agent.action_step, "environment_ticks": environment.elapsed_ticks,
-    "decision_steps": agent.decision_index, "remaining_budget": max(0, simulation_config.max_action_steps - agent.action_step),
-    "termination_reason": termination_reason, "a1": environment.initial_mine_ratio_a1, "a2": environment.initial_number_ratio_a2,
-    "a3": environment.mine_ratio(), "initial_number_ratio": environment.initial_number_ratio_a2,
-    "final_mine_ratio": environment.mine_ratio(), "final_number_ratio": environment.current_number_ratio(),
-    "final_actual_mutation": environment.global_average_mutation(), "final_estimated_mutation": agent.estimated_mutation_b4,
-    "final_f": _expected_f(environment, coupling), "final_actual_pressure": _actual_g(environment, agent, coupling),
-    "final_g": _actual_g(environment, agent, coupling), "theta": coupling.theta,
-    "mutation_gap": agent.estimated_mutation_b4 - environment.global_average_mutation(),
-    "defused_mines": agent.defused_mines, "failed_defuses": agent.failed_defuses, "disable_events": agent.overload_events,
-    "overload_events": agent.overload_events, "placed_probes": agent.placed_probes, "probe_update_events": agent.probe_update_events,
-    "probe_expiration_events": agent.probe_expiration_events, "memory_decay_events": agent.memory_decay_events,
-    "probe_grant_events": agent.probe_grant_events, "adjudication_grant_events": agent.adjudication_grant_events,
-    "adjudications_used": agent.adjudications_used, "global_mutation_count": int(environment.state_change_count.sum()),
-    "active_probes": len(agent.probes), "frozen_cells": int(environment.frozen.sum()),
-    "revealed_cells": int(agent.opened.sum()), "remaining_mines": int(environment.minefield.sum()),
-}
-if error_message is not None: summary["error"] = error_message
+    summary: dict[str, Any] = {
+        "executed_steps": agent.action_step, "action_steps": agent.action_step, "environment_ticks": environment.elapsed_ticks,
+        "decision_steps": agent.decision_index, "remaining_budget": max(0, simulation_config.max_action_steps - agent.action_step),
+        "termination_reason": termination_reason, "a1": environment.initial_mine_ratio_a1, "a2": environment.initial_number_ratio_a2,
+        "a3": environment.mine_ratio(), "initial_number_ratio": environment.initial_number_ratio_a2,
+        "final_mine_ratio": environment.mine_ratio(), "final_number_ratio": environment.current_number_ratio(),
+        "final_actual_mutation": environment.global_average_mutation(), "final_estimated_mutation": agent.estimated_mutation_b4,
+        "final_f": _expected_f(environment, coupling), "final_actual_pressure": _actual_g(environment, agent, coupling),
+        "final_g": _actual_g(environment, agent, coupling), "theta": coupling.theta,
+        "mutation_gap": agent.estimated_mutation_b4 - environment.global_average_mutation(),
+        "defused_mines": agent.defused_mines, "failed_defuses": agent.failed_defuses, "disable_events": agent.overload_events,
+        "overload_events": agent.overload_events, "placed_probes": agent.placed_probes, "probe_update_events": agent.probe_update_events,
+        "probe_expiration_events": agent.probe_expiration_events, "memory_decay_events": agent.memory_decay_events,
+        "probe_grant_events": agent.probe_grant_events, "adjudication_grant_events": agent.adjudication_grant_events,
+        "adjudications_used": agent.adjudications_used, "global_mutation_count": int(environment.state_change_count.sum()),
+        "active_probes": len(agent.probes), "frozen_cells": int(environment.frozen.sum()),
+        "revealed_cells": int(agent.opened.sum()), "remaining_mines": int(environment.minefield.sum()),
+    }
+    if error_message is not None: summary["error"] = error_message
 
-return {
-    "history": history, "snapshots": snapshots, "summary": summary,
-    "parameter_profile": {
-        "b1": environment_config.initial_state_rate_b1, "a1": environment.initial_mine_ratio_a1,
-        "c1": environment_config.infection_trigger_c1, "c2": environment_config.infection_center_c2,
-        "h1": environment_config.infection_step_h1, "mutation_feedback_rate": environment_config.mutation_feedback_rate,
-        "probe_estimate_window": agent_config.probe_estimate_window, "theta": coupling.theta,
-        "alpha": coupling.expected_alpha, "beta": coupling.expected_beta,
-        "gamma": coupling.actual_gamma, "delta": coupling.actual_delta,
-        "i": agent_config.flag_probe_probability_i, "c3": agent_config.memory_decay_ratio_c3,
-        "max_steps": simulation_config.max_action_steps,
-    },
-}
+    return {
+        "history": history, "snapshots": snapshots, "summary": summary,
+        "parameter_profile": {
+            "b1": environment_config.initial_state_rate_b1, "a1": environment.initial_mine_ratio_a1,
+            "c1": environment_config.infection_trigger_c1, "c2": environment_config.infection_center_c2,
+            "h1": environment_config.infection_step_h1, "mutation_feedback_rate": environment_config.mutation_feedback_rate,
+            "probe_estimate_window": agent_config.probe_estimate_window, "theta": coupling.theta,
+            "alpha": coupling.expected_alpha, "beta": coupling.expected_beta,
+            "gamma": coupling.actual_gamma, "delta": coupling.actual_delta,
+            "i": agent_config.flag_probe_probability_i, "c3": agent_config.memory_decay_ratio_c3,
+            "max_steps": simulation_config.max_action_steps,
+        },
+    }
 
 def run_parameter_scan(*, environment_config: EnvironmentConfig, agent_config: AgentConfig, coupling_config: CouplingConfig, simulation_config: SimulationConfig, scan_config: ScanConfig) -> list[dict[str, Any]]:
-    b1_values = np.linspace(scan_config.b1_start, scan_config.b1_end, scan_config.b1_points)
-    theta_values = np.linspace(scan_config.theta_start, scan_config.theta_end, scan_config.theta_points)
-    seeds = range(scan_config.seed_start, scan_config.seed_start + scan_config.seed_count)
-    combinations = list(product(b1_values, theta_values, seeds))
-    if len(combinations) > scan_config.max_runs:
-        raise ValueError(f"scan requests {len(combinations)} runs; maximum is {scan_config.max_runs}")
-    rows: list[dict[str, Any]] = []
-    for run_index, (b1, theta, seed) in enumerate(combinations, start=1):
-        environment = replace(environment_config, initial_state_rate_b1=float(b1))
-        coupling = replace(coupling_config, theta=float(theta))
-        simulation = replace(simulation_config, seed=int(seed))
-        result = run_simulation(environment_config=environment, agent_config=agent_config, coupling_config=coupling, simulation_config=simulation, capture_snapshots=False)
-        for history_row in result["history"]:
-            rows.append({"run_id": run_index, "scan_b1": float(b1), "scan_theta": float(theta), "seed": int(seed), **history_row})
-    return rows
+  b1_values = np.linspace(scan_config.b1_start, scan_config.b1_end, scan_config.b1_points)
+  theta_values = np.linspace(scan_config.theta_start, scan_config.theta_end, scan_config.theta_points)
+  seeds = range(scan_config.seed_start, scan_config.seed_start + scan_config.seed_count)
+  combinations = list(product(b1_values, theta_values, seeds))
+  if len(combinations) > scan_config.max_runs:
+    raise ValueError(f"scan requests {len(combinations)} runs; maximum is {scan_config.max_runs}")
+  rows: list[dict[str, Any]] = []
+  for run_index, (b1, theta, seed) in enumerate(combinations, start=1):
+    environment = replace(environment_config, initial_state_rate_b1=float(b1))
+    coupling = replace(coupling_config, theta=float(theta))
+    simulation = replace(simulation_config, seed=int(seed))
+    result = run_simulation(environment_config=environment, agent_config=agent_config, coupling_config=coupling, simulation_config=simulation, capture_snapshots=False)
+      for history_row in result["history"]:
+        rows.append({"run_id": run_index, "scan_b1": float(b1), "scan_theta": float(theta), "seed": int(seed), **history_row})
+  return rows    
