@@ -167,17 +167,17 @@ with tab_snapshot:
   with tab_scan:
     scan_config, scan_steps = scan_controls(simulation_config)
     requested_runs = scan_config.b1_points* scan_config.theta_points * scan_config.seed_count
-   scan_clicked = st.button("运行参数扫描", type="primary", disabled=requested_runs > scan_config.max_runs)
-   if requested_runs > scan_config.max_runs:
+    scan_clicked = st.button("运行参数扫描", type="primary", disabled=requested_runs > scan_config.max_runs)
+    if requested_runs > scan_config.max_runs:
        st.error(f"当前为 {requested_runs} 轮，最多允许 {scan_config.max_runs} 轮。")
-   if scan_clicked:
+    if scan_clicked:
        with st.spinner(f"正在运行 {requested_runs} 轮仿真"):
            rows = run_parameter_scan(environment_config=environment_config, agent_config=agent_config, coupling_config=coupling_config, simulation_config=replace(simulation_config, max_action_steps=scan_steps), scan_config=scan_config)
        st.session_state.scan_frame = pd.DataFrame(rows)
        st.session_state.scan_configs = (current_configs, scan_config)
-scan_frame = st.session_state.get("scan_frame")
-if isinstance(scan_frame, pd.DataFrame) and not scan_frame.empty:
-    if st.session_state.get("scan_configs") != (current_configs, scan_config):
+    scan_frame = st.session_state.get("scan_frame")
+    if isinstance(scan_frame, pd.DataFrame) and not scan_frame.empty:
+      if st.session_state.get("scan_configs") != (current_configs, scan_config):
         st.warning("侧边栏或扫描参数已修改，下方扫描结果仍对应上次运行的参数，请重新点击「运行参数扫描」。")
     run_ids = sorted(scan_frame["run_id"].unique().tolist())
     selected_runs = st.multiselect("运行编号", run_ids, default=run_ids[: min(5, len(run_ids))])
