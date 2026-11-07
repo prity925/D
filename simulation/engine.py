@@ -5,7 +5,7 @@ from itertools import product
 from typing import Any
 import numpy as np
 
-from simulation.agent import ConstrainedAgent
+from simulation.agent import ConstrainedAgentFinal as ConstrainedAgent
 from simulation.config import AgentConfig, CouplingConfig, EnvironmentConfig, ScanConfig, SimulationConfig
 from simulation.environment import DynamicEnvironment
 from simulation.models import CellObservation, Coord, IntervalEvent, PlannedAction, SimulationResult
