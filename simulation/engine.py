@@ -35,7 +35,7 @@ def _capture_snapshot(*, action: str, environment: DynamicEnvironment, agent: Co
         "neighbor_counts": environment.neighbor_counts.copy(), "mutation_rate": environment.b2.copy(),
         "mutation_count": environment.state_change_count.copy(), "state_change_count": environment.state_change_count.copy(),
         "resample_count": environment.resample_count.copy(), "stabilization_mask": frozen, "frozen_cells": int(frozen.sum()),
-        "flags": agent.flags.copy(), "questions": agent.questions.copy(), "known_state_grid": agent.known_state_grid(),
+        "flags": agent.flags.copy(), "questions": agent.questions.copy(), "known_state_grid": np.full((environment.rows, environment.cols), -1, dtype=int),
         "memory_heatmap": agent.memory_heatmap(), "b4_grid": agent.estimated_volatility_grid(),
         "estimated_mutation": agent.estimated_mutation_b4, "actual_mutation": environment.global_average_mutation(),
         "f": f_value, "expected_line": f_value, "g": g_value, "actual_pressure": g_value,
