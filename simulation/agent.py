@@ -1,4 +1,4 @@
-# 粘贴后请删除这行顶格注释
+# 
 """约束代理模型"""
 from __future__ import annotations
 import math
@@ -11,7 +11,7 @@ from simulation.models import (
     IntervalEvent, MemoryEntry, PlannedAction, Probe, PROBE_OUTLIER_SIGMA
 )
 
-class ConstrainedAgent:
+class ConstrainedAgentFinal:
     def __init__(self, config: AgentConfig, shape: tuple[int, int], rng: np.random.Generator, *, initial_mine_ratio_a1: float) -> None:
         self.config = config
         self.rows, self.cols = shape
@@ -27,7 +27,7 @@ class ConstrainedAgent:
         self.memory: dict[Coord, MemoryEntry] = {}
         self.probes: list[Probe] = []
         self.cell_probe_stats: dict[Coord, CellProbeStats] = {}
-# 粘贴后请删除这行顶格注释
+# 
         self.action_step = 0
         self.decision_index = 0
         self.probe_grant_progress = 0
@@ -84,7 +84,7 @@ class ConstrainedAgent:
     def register_decision(self) -> None:
         self.decision_index += 1
 
-# 粘贴后请删除这行顶格注释
+# 
     def _remember(self, coord: Coord, *, observed_state: str, marker: str = "none", revealed: bool = False, visible_mutation_ratio: float = 0.0, confidence: float = 0.0, source: str, note: str = "") -> None:
         entry = MemoryEntry(coord=coord, action_step=self.action_step, observed_state=observed_state, marker=marker, revealed=revealed, visible_mutation_ratio=visible_mutation_ratio, confidence=confidence, source=source, note=note)
         self.observation_log.append(entry)
@@ -135,7 +135,7 @@ class ConstrainedAgent:
         else:
             self.defuse_enabled = True
 
-# 粘贴后请删除这行顶格注释
+# 
     def record_defuse_result(self, success: bool) -> None:
         self.defuse_history.append(success)
 
@@ -199,7 +199,7 @@ class ConstrainedAgent:
             current = self.memory.get(coord)
             self._remember(coord, observed_state=state, marker=current.marker if current else "none", revealed=bool(self.opened[coord]), visible_mutation_ratio=current.visible_mutation_ratio if current else 0.0, confidence=0.8, source="probe", note="probe initial scan")
 
-# 粘贴后请删除这行顶格注释
+# 
     def _probe_cell_estimate(self, intervals: list[int]) -> float | None:
         if len(intervals) < 2: return None
         values = np.asarray(intervals[-self.config.probe_estimate_window:], dtype=float)
@@ -259,7 +259,7 @@ class ConstrainedAgent:
             self.questions[coord] = False
             self.opened[coord] = False 
 
-# 粘贴后请删除这行顶格注释
+# 
     def advance_action_tick(self, readings: dict[Coord, dict[Coord, str]], *, counts_for_probe_grant: bool = True) -> None:
         self.action_step += 1
         self.update_probes(readings)
@@ -389,7 +389,7 @@ class ConstrainedAgent:
         def score(coord: Coord) -> int: return sum(1 for cell in self.adjudication_region(coord) if not self.opened[cell])
         return max(candidates, key=score)
 
-# 粘贴后请删除这行顶格注释
+# 
     def _number_followup(self) -> Coord | None:
         if self.initial_mine_ratio_a1 > self.config.number_followup_threshold: return None
         if self.rng.random() >= self.config.number_followup_probability: return None
@@ -408,7 +408,7 @@ class ConstrainedAgent:
         for coord in uncertain:
             if not self.opened[coord] and not self.flags[coord] and not self.questions[coord]: self.apply_marker("mark_question", coord)
 
-# 粘贴后请删除这行顶格注释
+# 
     def choose_action(self) -> PlannedAction:
         self._sync_markers()
         if not self.opened.any(): return PlannedAction("reveal", (int(self.rng.integers(0, self.rows)), int(self.rng.integers(0, self.cols))))
