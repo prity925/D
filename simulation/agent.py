@@ -53,6 +53,7 @@ class ConstrainedAgentFinal:
         self.probe_grant_events = 0
         self.adjudication_grant_events = 0
         self.adjudications_used = 0
+        self.adjudication_succeeded = False
 
     @property
     def estimated_mutation(self) -> float:
@@ -121,17 +122,20 @@ class ConstrainedAgentFinal:
         self.true_b3 = b3
 
     def defuse_cost(self) -> float:
+        # 文档：d1 = b3² / b4 * 0.5N（乘 0.5N，不是除），b4 为 B 反推的变异率
         if self.estimated_mutation_b4 <= 0: return float('inf')
-        return max(1.0, (self.true_b3 ** 2) / (self.estimated_mutation_b4 * 0.5 * self.N))
+        return max(1.0, 0.5 * self.N * (self.true_b3 ** 2) / self.estimated_mutation_b4)
 
     def defuse_cost_steps(self) -> int:
         return max(1, int(math.ceil(self.defuse_cost())))
 
     def check_lose_defuse_ability(self) -> None:
         if self.defuse_cost() > self.N * 0.02:
-            if self.defuse_enabled: 
+            if self.defuse_enabled:
                 self.overload_events += 1
-            self.defuse_enabled = False
+                self.defuse_enabled = False
+                # 失能后要给出判定机会（占用 d7），否则 B 永远拿不到保底
+                self.pending_interval_events.append(IntervalEvent(due_step=self.action_step, priority=4, event_type="adjudication_grant"))
         else:
             self.defuse_enabled = True
 
@@ -148,6 +152,12 @@ class ConstrainedAgentFinal:
             self.adjudication_opportunity = False
             self.adjudications_used += 1
 
+    def record_adjudication_result(self, success: bool) -> None:
+        """判定成功 -> 恢复拔雷能力，并使本次运行终止（文档：判定成功则终止此次运行）。"""
+        self.adjudication_succeeded = bool(success)
+        if success:
+            self.defuse_enabled = True
+
     def _calculate_g_and_f(self) -> tuple[float, float]:
         estimated_a3 = sum(1 for e in self.memory.values() if e.observed_state.startswith("number:")) / max(1, len(self.memory))
         estimated_a2 = self.initial_mine_ratio_a1
@@ -160,14 +170,19 @@ class ConstrainedAgentFinal:
         return g_est < f_est
 
     def adjudication_region(self, center: Coord) -> set[Coord]:
+        """文档：选定一个格子，相连的 16 个格子（共 17 格）为判定区域。"""
         row, col = center
-        cells: set[Coord] = set()
+        cells: set[Coord] = {center}
         for dr in range(-2, 3):
             for dc in range(-2, 3):
-                if abs(dr) == 2 and abs(dc) == 2: continue
+                if max(abs(dr), abs(dc)) != 2: continue
                 nr, nc = row + dr, col + dc
                 if self.in_bounds(nr, nc): cells.add((nr, nc))
         return cells
+
+    def adjudication_freeze_cells(self, center: Coord) -> set[Coord]:
+        """冻结区域 = 中心和相连 16 格（共 17 格）。"""
+        return self.adjudication_region(center)
 
     def _estimated_local_mutation(self, center: Coord) -> float:
         row, col = center

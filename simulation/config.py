@@ -7,10 +7,10 @@ from dataclasses import dataclass
 class EnvironmentConfig:
     rows: int = 20
     cols: int = 20
-    initial_state_rate_b1: float = 0.15
-    infection_trigger_c1: float = 1.2
-    infection_center_c2: float = 0.3
-    infection_step_h1: float = 0.05
+    initial_state_rate_b1: float = 0.02
+    infection_trigger_c1: float = 1.5
+    infection_center_c2: float = 0.2
+    infection_step_h1: float = 0.005
     empty_reveal_min_h2: int = 4
     empty_reveal_max_h2: int = 12
     mutation_feedback_rate: float = 0.2
@@ -30,11 +30,12 @@ class AgentConfig:
     probe_interval_d2: int = 10
     probe_duration_d6: int = 15
     flag_probe_probability_i: float = 0.3
+    probe_flag_cost_d4: int = 6
+    probe_placement_cost_d5: int = 2
+    adjudicate_cost_d7: int = 6
     memory_record_limit: int = 1000
     memory_decay_ratio_c3: float = 0.22
     mine_reveal_cost_d3: int = 5
-    adjudicate_cost_d4: int = 6
-    probe_placement_cost_d5: int = 2
     compare_radius: int = 2
     layer_penalty_e: float = 0.08
     number_followup_threshold: float = 0.22

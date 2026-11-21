@@ -15,7 +15,8 @@ class DynamicEnvironment:
         self.minefield = (self.rng.random((self.rows, self.cols)) < config.initial_state_rate_b1)
         self.initial_mine_ratio_a1 = float(self.minefield.mean())
         self.region_weight = self._build_region_weights()
-        self.b2 = np.clip(self.initial_mine_ratio_a1 * self.region_weight, 0.0, 1.0)
+        # 文档：初始 b2 以 a1 为中心，[0.5a1, 1.5a1] 截断正态抽样（b2 本身就是该样本）
+        self.b2 = np.clip(self.region_weight, 0.0, 1.0)
         self.initial_average_mutation_b3 = float(self.b2.mean())
         self.frozen = np.zeros((self.rows, self.cols), dtype=bool)
         self.resample_count = np.zeros((self.rows, self.cols), dtype=int)
@@ -43,21 +44,25 @@ class DynamicEnvironment:
         return self.initial_number_ratio_a2
 
     def _build_region_weights(self) -> np.ndarray:
+        """八块固定坐标区域：每块内初始 b2 以 a1 为中心，[0.5a1, 1.5a1] 截断正态，两位小数。"""
         weights = np.ones((self.rows, self.cols), dtype=float)
-        row_edges = np.linspace(0, self.rows, 4, dtype=int)
-        col_edges = np.linspace(0, self.cols, 4, dtype=int)
+        row_edges = np.linspace(0, self.rows, 3, dtype=int)  # 2 行带
+        col_edges = np.linspace(0, self.cols, 5, dtype=int)  # 4 列带 -> 2x4 = 8 块
         region_id = np.zeros((self.rows, self.cols), dtype=int)
-        for row_band in range(3):
-            for col_band in range(3):
-                region_id[row_edges[row_band]:row_edges[row_band + 1], col_edges[col_band]:col_edges[col_band + 1]] = row_band * 3 + col_band
-        region_id[region_id == 1] = 0
-        region_id[region_id == 7] = 8
-        for region in range(9):
-            if region in (1, 7):
-                continue
+        for row_band in range(2):
+            for col_band in range(4):
+                region_id[row_edges[row_band]:row_edges[row_band + 1], col_edges[col_band]:col_edges[col_band + 1]] = row_band * 4 + col_band
+
+        a1 = self.initial_mine_ratio_a1 if self.initial_mine_ratio_a1 > 0 else 0.01
+
+        for region in range(8):
             mask = region_id == region
             if mask.any():
-                weights[mask] = self.rng.uniform(0.5, 1.5)
+                loc = a1
+                scale = a1 * 0.2  # 让大部分样本落在截断区间内
+                samples = self.rng.normal(loc, scale, size=mask.sum())
+                samples = np.clip(samples, 0.5 * a1, 1.5 * a1)
+                weights[mask] = np.round(samples, 2)
         return weights
 
     def in_bounds(self, row: int, col: int) -> bool:
@@ -161,37 +166,39 @@ class DynamicEnvironment:
         selection_probability = float(np.clip(self.initial_number_ratio_a2 * self.config.infection_center_c2, 0.0, 1.0))
         for row, col in np.argwhere(self.minefield):
             center = (int(row), int(col))
-            if self.rng.random() >= selection_probability: 
+            if self.rng.random() >= selection_probability:
                 continue
             neighbors = self.neighbors(center)
             non_empty_neighbors = [coord for coord in neighbors if self.observable_label(coord) != "empty"]
             n = len(non_empty_neighbors)
-            if n == 0: 
+            if n == 0:
                 continue
-            count = n // 2 if self.rng.random() < 0.5 else (n + 1) // 2
-            candidates = [center, *neighbors]
-            if count <= 0: 
+            # n 偶数取 n/2，奇数取 (n-1)/2 向上取整（文档：随机二分之 n 或二分之 n-1）
+            count = n // 2 if n % 2 == 0 else (n - 1) // 2
+            if count <= 0:
                 continue
-        indices = self.rng.choice(len(candidates), size=min(count, len(candidates)), replace=False)
-        for index in np.atleast_1d(indices):
-            coord = candidates[int(index)]
-            if self.rng.random() < 0.7:
-                delta = self.config.infection_step_h1
-            else:
-                delta = -self.config.infection_step_h1
-            self.b2[coord] = np.clip(self.b2[coord] + delta, 0.0, 1.0)
+            candidates = [center, *non_empty_neighbors]
+            indices = self.rng.choice(len(candidates), size=min(count, len(candidates)), replace=False)
+            for index in np.atleast_1d(indices):
+                coord = candidates[int(index)]
+                # 有增有减，增的期望大于减的
+                if self.rng.random() < 0.7:
+                    delta = self.config.infection_step_h1
+                else:
+                    delta = -self.config.infection_step_h1
+                self.b2[coord] = np.clip(self.b2[coord] + delta, 0.0, 1.0)
 
     def step(self) -> None:
         self.elapsed_ticks += 1
         mutable = ~self.frozen
         previous = self.minefield.copy()
-        flip = self.rng.random((self.rows, self.cols)) < self.b2
-        self.minefield[mutable] ^= flip[mutable]
+        # 文档：雷格变为其他格的概率 1-b2（变为雷 b2）；其他格变为雷的概率 b2（不变 1-b2）
+        rolls = self.rng.random((self.rows, self.cols))
+        flip = np.where(previous, rolls < (1.0 - self.b2), rolls < self.b2)
+        self.minefield = np.logical_xor(previous, np.logical_and(flip, mutable))
         self.resample_count[mutable] += 1
         self.last_state_change = np.logical_and(previous != self.minefield, mutable)
         self.state_change_count[self.last_state_change] += 1
-        rate = self.config.mutation_feedback_rate
-        self.b2[mutable] += rate * (self.last_state_change[mutable].astype(float) - 0.5)
         self.scan_global_state()
         self._apply_conduction()
         self.b2 = np.clip(self.b2, 0.0, 1.0)

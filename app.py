@@ -24,10 +24,10 @@ def expression_input(label: str, default: str, *, key: str, minimum: float | Non
 
 def build_environment_config() -> EnvironmentConfig:
     st.sidebar.subheader("系统 A")
-    b1 = expression_input("b1 初始全局场波动率", "0.15", key="b1", minimum=0.0, maximum=1.0)
-    c1 = expression_input("c1 波动传导密度触发阈值", "1.2", key="c1", minimum=1.000001, maximum=10.0)
-    c2 = expression_input("c2 传导激活动作选择概率", "0.3", key="c2", minimum=0.0, maximum=1.0)
-    h1 = expression_input("h1 单次波动传导步长", "0.05", key="h1", minimum=0.0, maximum=1.0)
+    b1 = expression_input("b1 初始全局场波动率", "0.02", key="b1", minimum=0.0, maximum=1.0)
+    c1 = expression_input("c1 波动传导密度触发阈值", "1.5", key="c1", minimum=1.000001, maximum=10.0)
+    c2 = expression_input("c2 传导激活动作选择概率", "0.2", key="c2", minimum=0.0, maximum=1.0)
+    h1 = expression_input("h1 单次波动传导步长", "0.005", key="h1", minimum=0.0, maximum=1.0)
     h2_min = int(st.sidebar.number_input("h2 波及下限", 0, 16, 4, 1))
     h2_max = int(st.sidebar.number_input("h2 波及上限", 0, 16, 12, 1))
     return EnvironmentConfig(initial_state_rate_b1=b1, infection_trigger_c1=c1, infection_center_c2=c2, infection_step_h1=h1, empty_reveal_min_h2=h2_min, empty_reveal_max_h2=h2_max)
@@ -46,14 +46,15 @@ def build_agent_config() -> AgentConfig:
     st.sidebar.subheader("系统 B")
     d2 = int(st.sidebar.number_input("d2 探测冷却间隔", 1, 120, 10, 1))
     d3 = int(st.sidebar.number_input("d3 踩雷追加惩罚步", 0, 60, 5, 1))
-    d4 = int(st.sidebar.number_input("d4 判定动作步数", 1, 60, 6, 1))
-    d5 = int(st.sidebar.number_input("d5 部署探测器步数", 1, 60, 2, 1))
+    d4 = int(st.sidebar.number_input("d4 有雷标记旁部署探测器步数", 1, 60, 6, 1))
+    d5 = int(st.sidebar.number_input("d5 无雷标记旁部署探测器步数", 1, 60, 2, 1))
+    d7 = int(st.sidebar.number_input("d7 判定动作步数", 1, 60, 6, 1))
     d6 = int(st.sidebar.number_input("d6 探测器持续步数", 1, 120, 15, 1))
     i = expression_input("i 标记雷旁主动探测先验", "0.3", key="probe_i", minimum=0.0, maximum=1.0)
     memory_limit = int(st.sidebar.number_input("记忆数据库记录上限", 1, 100_000, 1000, 100))
     c3 = expression_input("c3 记忆衰减单次删除比例", "0.22", key="c3", minimum=0.0, maximum=1.0)
     estimate_window = int(st.sidebar.number_input("探测估计窗口", 2, 1000, 32, 1))
-    return AgentConfig(probe_interval_d2=d2, probe_duration_d6=d6, flag_probe_probability_i=i, memory_record_limit=memory_limit, memory_decay_ratio_c3=c3, mine_reveal_cost_d3=d3, adjudicate_cost_d4=d4, probe_placement_cost_d5=d5, probe_estimate_window=estimate_window)
+    return AgentConfig(probe_interval_d2=d2, probe_duration_d6=d6, flag_probe_probability_i=i, memory_record_limit=memory_limit, memory_decay_ratio_c3=c3, mine_reveal_cost_d3=d3, probe_flag_cost_d4=d4, probe_placement_cost_d5=d5, adjudicate_cost_d7=d7, probe_estimate_window=estimate_window)
 
 def build_simulation_config() -> SimulationConfig:
     st.sidebar.subheader("仿真")

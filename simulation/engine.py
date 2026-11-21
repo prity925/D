@@ -11,11 +11,13 @@ from simulation.environment import DynamicEnvironment
 from simulation.models import CellObservation, Coord, IntervalEvent, PlannedAction, SimulationResult
 
 def _expected_f(environment: DynamicEnvironment, coupling: CouplingConfig) -> float:
-    value = (coupling.expected_alpha * environment.initial_mine_ratio_a1 + coupling.expected_beta * environment.global_average_mutation())
+    # 依照文档：f = αa3 + βb3（a3 当前雷比例，b3 当前全局变异率）
+    value = (coupling.expected_alpha * environment.mine_ratio() + coupling.expected_beta * environment.global_average_mutation())
     return float(np.clip(value, 0.0, 1.0))
 
 def _actual_g(environment: DynamicEnvironment, agent: ConstrainedAgent, coupling: CouplingConfig) -> float:
-    value = (coupling.actual_gamma * environment.initial_state_rate_b1 + coupling.actual_delta * agent.estimated_mutation_b4 + coupling.theta)
+    # 依照文档：g = γa2 + δb4 + θ（a2 初始数字格比例，b4 B 推演的变异率）
+    value = (coupling.actual_gamma * environment.initial_number_ratio_a2 + coupling.actual_delta * agent.estimated_mutation_b4 + coupling.theta)
     return float(np.clip(value, 0.0, 1.0))
 
 def _comparison(environment: DynamicEnvironment, agent: ConstrainedAgent, coupling: CouplingConfig) -> str:
@@ -105,7 +107,9 @@ def _handle_reveal(*, action: PlannedAction, environment: DynamicEnvironment, ag
     return True
 
 def _handle_probe(*, action: PlannedAction, environment: DynamicEnvironment, agent: ConstrainedAgent, agent_config: AgentConfig, coupling: CouplingConfig, simulation_config: SimulationConfig, comparison: str, history: list[dict[str, Any]], snapshots: list[dict[str, Any]], capture_snapshots: bool, **_kwargs: Any) -> bool:
-    cost = agent_config.probe_placement_cost_d5
+    # 文档：有雷标记旁部署消耗 d4，无雷标记旁部署消耗 d5，d4 > d5
+    near_flag = any(agent.flags[coord] for coord in agent.neighbors(action.target))
+    cost = agent_config.probe_flag_cost_d4 if near_flag else agent_config.probe_placement_cost_d5
     if agent.action_step + cost > simulation_config.max_action_steps: return False
     action_start_step = agent.action_step
     agent.consume_probe_opportunity()
@@ -138,18 +142,22 @@ def _handle_defuse(*, action: PlannedAction, environment: DynamicEnvironment, ag
     return True
 
 def _handle_adjudicate(*, action: PlannedAction, environment: DynamicEnvironment, agent: ConstrainedAgent, agent_config: AgentConfig, coupling: CouplingConfig, simulation_config: SimulationConfig, comparison: str, history: list[dict[str, Any]], snapshots: list[dict[str, Any]], capture_snapshots: bool, **_kwargs: Any) -> bool:
-    cost = agent_config.adjudicate_cost_d4
+    # 文档：占用 d7 步，冻结相连 16 格（共 17 格）的变异，判定成功则终止本次运行
+    cost = agent_config.adjudicate_cost_d7
     if agent.action_step + cost > simulation_config.max_action_steps: return False
     action_start_step = agent.action_step
     agent.consume_adjudication_opportunity()
     center = action.target
-    frozen_neighbors = set(agent.neighbors(center))
-    environment.freeze_cells(frozen_neighbors)
+    frozen_region = agent.adjudication_freeze_cells(center)
+    environment.freeze_cells(frozen_region)
     _advance_action_ticks(count=cost, action=action, action_phase="adjudicate_work", comparison=comparison, environment=environment, agent=agent, coupling=coupling, simulation=simulation_config, history=history, snapshots=snapshots, capture_snapshots=capture_snapshots, counts_for_probe_grant=True)
-    environment.unfreeze_cells(frozen_neighbors)
+    environment.unfreeze_cells(frozen_region)
     cells = agent.adjudication_region(center)
     agent.observe_cells(_cell_observations([(coord, environment.observable_label(coord)) for coord in cells], action_step=agent.action_step, revealed=True, source="adjudicate"))
-    history.append(_history_row(action=action.action_type, action_target=action.target, action_phase="adjudicate_done", comparison=comparison, environment=environment, agent=agent, coupling=coupling))
+    # 判定：冻结区内若仍存在雷格，则 B 的拔雷能力判定成功 -> 终止本次运行
+    region_has_mine = any(bool(environment.minefield[coord]) for coord in cells)
+    agent.record_adjudication_result(region_has_mine)
+    history.append(_history_row(action=action.action_type, action_target=action.target, action_phase="adjudicate_success" if region_has_mine else "adjudicate_failed", comparison=comparison, environment=environment, agent=agent, coupling=coupling))
     _complete_action(action=action, action_start_step=action_start_step, comparison=comparison, environment=environment, agent=agent, agent_config=agent_config, coupling=coupling, simulation=simulation_config, history=history, snapshots=snapshots, capture_snapshots=capture_snapshots)
     return True
 
@@ -194,6 +202,11 @@ def run_simulation(*, environment_config: EnvironmentConfig, agent_config: Agent
                 action_completed = _handle_adjudicate(action=action, environment=environment, agent=agent, agent_config=agent_config, coupling=coupling, simulation_config=simulation_config, comparison=comparison, history=history, snapshots=snapshots, capture_snapshots=capture_snapshots)
             else:
                 action_completed = _handle_wait(action=action, environment=environment, agent=agent, agent_config=agent_config, coupling=coupling, simulation_config=simulation_config, comparison=comparison, history=history, snapshots=snapshots, capture_snapshots=capture_snapshots)
+                
+            if agent.adjudication_succeeded:
+                termination_reason = "adjudication_success"
+                history.append(_history_row(action=action.action_type, action_target=action.target, action_phase="run_terminated_by_adjudication", comparison=comparison, environment=environment, agent=agent, coupling=coupling))
+                break
                 
             if not action_completed:
                 termination_reason = "insufficient_budget_for_atomic_action"
