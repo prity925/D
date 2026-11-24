@@ -7,10 +7,10 @@ from dataclasses import dataclass
 class EnvironmentConfig:
     rows: int = 20
     cols: int = 20
-    initial_state_rate_b1: float = 0.02
+    initial_state_rate_b1: float = 0.03
     infection_trigger_c1: float = 1.5
     infection_center_c2: float = 0.2
-    infection_step_h1: float = 0.005
+    infection_step_h1: float = 0.015
     empty_reveal_min_h2: int = 4
     empty_reveal_max_h2: int = 12
     mutation_feedback_rate: float = 0.2
@@ -23,6 +23,7 @@ class CouplingConfig:
     actual_gamma: float = 0.5
     actual_delta: float = 0.5
     theta: float = 0.02
+    theta_spread: float = 0.05
     def __post_init__(self) -> None: pass
 
 @dataclass(slots=True)
@@ -33,6 +34,10 @@ class AgentConfig:
     probe_flag_cost_d4: int = 6
     probe_placement_cost_d5: int = 2
     adjudicate_cost_d7: int = 6
+    ability_recheck: bool = True
+    recovery_delay_d8: int = 50
+    terminate_on_success: bool = True
+    probe_while_disabled: bool = False
     memory_record_limit: int = 1000
     memory_decay_ratio_c3: float = 0.22
     mine_reveal_cost_d3: int = 5

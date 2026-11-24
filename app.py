@@ -24,10 +24,10 @@ def expression_input(label: str, default: str, *, key: str, minimum: float | Non
 
 def build_environment_config() -> EnvironmentConfig:
     st.sidebar.subheader("系统 A")
-    b1 = expression_input("b1 初始全局场波动率", "0.02", key="b1", minimum=0.0, maximum=1.0)
+    b1 = expression_input("b1 初始全局场波动率", "0.03", key="b1", minimum=0.0, maximum=1.0)
     c1 = expression_input("c1 波动传导密度触发阈值", "1.5", key="c1", minimum=1.000001, maximum=10.0)
     c2 = expression_input("c2 传导激活动作选择概率", "0.2", key="c2", minimum=0.0, maximum=1.0)
-    h1 = expression_input("h1 单次波动传导步长", "0.005", key="h1", minimum=0.0, maximum=1.0)
+    h1 = expression_input("h1 单次波动传导步长", "0.015", key="h1", minimum=0.0, maximum=1.0)
     h2_min = int(st.sidebar.number_input("h2 波及下限", 0, 16, 4, 1))
     h2_max = int(st.sidebar.number_input("h2 波及上限", 0, 16, 12, 1))
     return EnvironmentConfig(initial_state_rate_b1=b1, infection_trigger_c1=c1, infection_center_c2=c2, infection_step_h1=h1, empty_reveal_min_h2=h2_min, empty_reveal_max_h2=h2_max)
@@ -40,7 +40,8 @@ def build_coupling_config() -> CouplingConfig:
     gamma = expression_input("γ：g 中 a2 系数", "0.5", key="gamma", minimum=0.0, maximum=1.0)
     delta = expression_input("δ：g 中 b4 系数", "0.5", key="delta", minimum=0.0, maximum=1.0)
     theta = expression_input("θ 残差项", "0.02", key="theta", minimum=-1.0, maximum=1.0)
-    return CouplingConfig(expected_alpha=alpha, expected_beta=beta, actual_gamma=gamma, actual_delta=delta, theta=theta)
+    theta_spread = expression_input("θ 随机幅度（每次决策在 θ±spread 内抽样）", "0.05", key="theta_spread", minimum=0.0, maximum=1.0)
+    return CouplingConfig(expected_alpha=alpha, expected_beta=beta, actual_gamma=gamma, actual_delta=delta, theta=theta, theta_spread=theta_spread)
 
 def build_agent_config() -> AgentConfig:
     st.sidebar.subheader("系统 B")

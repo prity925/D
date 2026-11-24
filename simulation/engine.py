@@ -187,6 +187,7 @@ def run_simulation(*, environment_config: EnvironmentConfig, agent_config: Agent
     try:
         while agent.action_step < simulation_config.max_action_steps:
             agent.update_environment_state(environment.global_average_mutation())
+            agent.sync_coupling(coupling.theta, getattr(coupling, "theta_spread", 0.0))
             action = agent.choose_action()
             agent.register_decision()
             comparison = _comparison(environment, agent, coupling)
@@ -203,10 +204,13 @@ def run_simulation(*, environment_config: EnvironmentConfig, agent_config: Agent
             else:
                 action_completed = _handle_wait(action=action, environment=environment, agent=agent, agent_config=agent_config, coupling=coupling, simulation_config=simulation_config, comparison=comparison, history=history, snapshots=snapshots, capture_snapshots=capture_snapshots)
                 
-            if agent.adjudication_succeeded:
+            if agent.adjudication_succeeded and agent_config.terminate_on_success:
                 termination_reason = "adjudication_success"
                 history.append(_history_row(action=action.action_type, action_target=action.target, action_phase="run_terminated_by_adjudication", comparison=comparison, environment=environment, agent=agent, coupling=coupling))
                 break
+            if agent.adjudication_succeeded and not agent_config.terminate_on_success:
+                # 实验模式：判定成功只恢复能力，不终止运行，便于统计停留时间/迟滞
+                agent.adjudication_succeeded = False
                 
             if not action_completed:
                 termination_reason = "insufficient_budget_for_atomic_action"

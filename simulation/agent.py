@@ -54,6 +54,10 @@ class ConstrainedAgentFinal:
         self.adjudication_grant_events = 0
         self.adjudications_used = 0
         self.adjudication_succeeded = False
+        self.recovery_due_step: int | None = None
+        self.recovery_events = 0
+        self.coupling_theta: float = 0.02
+        self.theta_spread: float = 0.0
 
     @property
     def estimated_mutation(self) -> float:
@@ -121,6 +125,17 @@ class ConstrainedAgentFinal:
     def update_environment_state(self, b3: float) -> None:
         self.true_b3 = b3
 
+    def sync_coupling(self, theta: float, theta_spread: float = 0.0) -> None:
+        """把耦合配置同步给 B，使 θ（残差）真正进入 B 的策略层。"""
+        self.coupling_theta = float(theta)
+        self.theta_spread = float(theta_spread)
+
+    def _sample_theta(self) -> float:
+        """文档：θ 为残差，每次随机取一个范围内的值；spread 为 0 时退化为常数。"""
+        if self.theta_spread <= 0.0:
+            return self.coupling_theta
+        return float(self.rng.uniform(self.coupling_theta - self.theta_spread, self.coupling_theta + self.theta_spread))
+
     def defuse_cost(self) -> float:
         # 文档：d1 = b3² / b4 * 0.5N（乘 0.5N，不是除），b4 为 B 反推的变异率
         if self.estimated_mutation_b4 <= 0: return float('inf')
@@ -153,16 +168,19 @@ class ConstrainedAgentFinal:
             self.adjudications_used += 1
 
     def record_adjudication_result(self, success: bool) -> None:
-        """判定成功 -> 恢复拔雷能力，并使本次运行终止（文档：判定成功则终止此次运行）。"""
+        """判定成功 -> 恢复拔雷能力并终止；失败 -> 进入不应期，D 步后重新获得能力（兴奋性介质）。"""
         self.adjudication_succeeded = bool(success)
         if success:
             self.defuse_enabled = True
+        else:
+            self.recovery_due_step = self.action_step + max(0, self.config.recovery_delay_d8)
+            self.recovery_events += 1
 
     def _calculate_g_and_f(self) -> tuple[float, float]:
         estimated_a3 = sum(1 for e in self.memory.values() if e.observed_state.startswith("number:")) / max(1, len(self.memory))
         estimated_a2 = self.initial_mine_ratio_a1
         f_est = 0.6 * estimated_a3 + 0.4 * self.estimated_mutation_b4
-        g_est = 0.5 * estimated_a2 + 0.5 * self.estimated_mutation_b4 + 0.02
+        g_est = 0.5 * estimated_a2 + 0.5 * self.estimated_mutation_b4 + self._sample_theta()
         return f_est, g_est
 
     def in_predictable_mode(self) -> bool:
@@ -278,6 +296,11 @@ class ConstrainedAgentFinal:
     def advance_action_tick(self, readings: dict[Coord, dict[Coord, str]], *, counts_for_probe_grant: bool = True) -> None:
         self.action_step += 1
         self.update_probes(readings)
+        # 不应期结束：重新获得拔雷与探测能力，并允许下一次判定机会
+        if self.recovery_due_step is not None and self.action_step >= self.recovery_due_step:
+            self.defuse_enabled = True
+            self.adjudication_granted = False
+            self.recovery_due_step = None
         if not counts_for_probe_grant: return
         self.probe_grant_progress += 1
         while self.probe_grant_progress >= self.next_probe_grant_progress:
@@ -426,11 +449,17 @@ class ConstrainedAgentFinal:
 # 
     def choose_action(self) -> PlannedAction:
         self._sync_markers()
+        if self.config.ability_recheck and not self.defuse_enabled:
+            # 每次决策重新核算 d1：若回落到阈值内则恢复拔雷能力，形成“失能/不失能”来回徘徊
+            self.check_lose_defuse_ability()
         if not self.opened.any(): return PlannedAction("reveal", (int(self.rng.integers(0, self.rows)), int(self.rng.integers(0, self.cols))))
         if not self.defuse_enabled:
             if self.adjudication_opportunity:
                 center = self._choose_adjudicate_center()
                 if center is not None: return PlannedAction("adjudicate", center)
+            if self.config.probe_while_disabled and self.probe_opportunity:
+                center = self._choose_probe_center_with_flag_prior()
+                if center is not None: return PlannedAction("probe", center)
             safe, _, _ = self._constraint_hints()
             safe_target = self._choose_hidden_target(safe)
             if safe_target is not None and safe_target in safe: return PlannedAction("reveal", safe_target)
